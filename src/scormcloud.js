@@ -8,6 +8,7 @@ var _ = require('lodash');
 var md5 = require('md5');
 var moment = require('moment');
 var request = require('request');
+var requestProgress = require('request-progress');
 var parseString = require('xml2js').parseString;
 
 const VERBOSE = false;
@@ -218,7 +219,8 @@ SCORMCloud.prototype.getCourseDetail = function (courseid, callback) {
     });
 }
 
-SCORMCloud.prototype.importCourse = function (courseid, path, callback) {
+SCORMCloud.prototype.importCourse = function (courseid, path, callback, options) {
+    options = options || {};
 
     var url = new URL('api?method=rustici.course.importCourse', this.serviceUrl);
 
@@ -230,7 +232,8 @@ SCORMCloud.prototype.importCourse = function (courseid, path, callback) {
         filedata: fs.createReadStream(path)
     }
 
-    this._request(url, { formData: formData }, function (error, json) {
+    this._request(url, { formData: formData, onProgress: options.onProgress }, 
+        function (error, json) {
 
         if (error) return callback(error, json);
 
@@ -1675,5 +1678,15 @@ SCORMCloud.prototype._request = function (url, options, callback) {
         });
 
     });
+
+    if(options.onProgress) {
+        requestProgress(request).on('progress', function (data) {
+            if(data && !Number.isNaN(data.percent)) {
+                options.onProgress(
+                    Math.round(data.percent * 100)
+                )
+            }
+        })
+    }
 
 }
