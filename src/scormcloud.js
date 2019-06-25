@@ -1655,7 +1655,7 @@ SCORMCloud.prototype._request = function (url, options, callback) {
     }
 
     // See https://www.npmjs.com/package/request
-    request.post(requestOptions, function (error, response, body) {
+    const _request = request.post(requestOptions, function (error, response, body) {
 
         if (error) return callback(error);
 
@@ -1680,7 +1680,7 @@ SCORMCloud.prototype._request = function (url, options, callback) {
     });
 
     if(options.onProgress) {
-        requestProgress(request).on('progress', function (data) {
+        requestProgress(_request).on('progress', function (data) {
             if(data && !Number.isNaN(data.percent)) {
                 options.onProgress(
                     Math.round(data.percent * 100)
