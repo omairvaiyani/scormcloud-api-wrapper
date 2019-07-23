@@ -8,6 +8,7 @@ var _ = require('lodash');
 var md5 = require('md5');
 var moment = require('moment');
 var request = require('request');
+var requestProgress = require('request-progress');
 var parseString = require('xml2js').parseString;
 
 const VERBOSE = false;
@@ -219,7 +220,6 @@ SCORMCloud.prototype.getCourseDetail = function (courseid, callback) {
 }
 
 SCORMCloud.prototype.importCourse = function (courseid, path, callback) {
-
     var url = new URL('api?method=rustici.course.importCourse', this.serviceUrl);
 
     // The id used to identify this course.
@@ -230,7 +230,8 @@ SCORMCloud.prototype.importCourse = function (courseid, path, callback) {
         filedata: fs.createReadStream(path)
     }
 
-    this._request(url, { formData: formData }, function (error, json) {
+    this._request(url, { formData: formData }, 
+        function (error, json) {
 
         if (error) return callback(error, json);
 
@@ -238,6 +239,57 @@ SCORMCloud.prototype.importCourse = function (courseid, path, callback) {
             "status":  json.rsp.status,
             "message": json.rsp.message,
             "importresult": toArray(json.rsp.importresult)
+        }
+
+        return callback(error, data);
+
+    });
+}
+
+SCORMCloud.prototype.importCourseAsync = function (courseid, path, callback) {
+    const url = new URL('api?method=rustici.course.importCourseAsync', this.serviceUrl);
+
+    // The id used to identify this course.
+    if (courseid) url.searchParams.set('courseid', courseid);
+
+    // See https://cloud.scorm.com/docs/api_reference/course.html#importcourse
+    const formData = {
+        filedata: fs.createReadStream(path)
+    }
+
+    this._request(url, { formData: formData }, 
+        function (error, json) {
+
+        if (error) return callback(error, json);
+
+        const data = {
+            "status":  json.rsp.status,
+            "token": json.rsp.token
+        }
+
+        return callback(error, data);
+
+    });
+}
+
+SCORMCloud.prototype.getAsyncImportResult = function (token, callback, options) {
+    options = options || {};
+
+    const url = new URL('api?method=rustici.course.getAsyncImportResult', this.serviceUrl);
+
+    // The id used to identify this import job.
+    if (token) url.searchParams.set('token', token);
+
+    this._request(url, { onProgress: options.onProgress }, 
+        function (error, json) {
+
+        if (error) return callback(error, json);
+
+        const data = {
+            "status":  json.rsp.status,
+            "message": json.rsp.message,
+            "progress": json.rsp.progress,
+            "importresults": toArray(json.rsp.importresults)
         }
 
         return callback(error, data);
@@ -1652,7 +1704,7 @@ SCORMCloud.prototype._request = function (url, options, callback) {
     }
 
     // See https://www.npmjs.com/package/request
-    request.post(requestOptions, function (error, response, body) {
+    const _request = request.post(requestOptions, function (error, response, body) {
 
         if (error) return callback(error);
 
@@ -1673,7 +1725,16 @@ SCORMCloud.prototype._request = function (url, options, callback) {
 
             callback(error, json);
         });
-
     });
+
+    if(options.onProgress) {
+        requestProgress(_request).on('progress', function (data) {
+            if(data && !Number.isNaN(data.percent)) {
+                options.onProgress(
+                    Math.round(data.percent * 100)
+                )
+            }
+        })
+    }
 
 }
